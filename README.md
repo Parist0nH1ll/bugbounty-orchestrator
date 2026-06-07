@@ -36,6 +36,37 @@ docker-compose ps
 | Redis | 6379 | 消息队列 & 缓存 |
 | Celery Worker | - | 后台任务执行 |
 
+### 本地开发（不使用 Docker）
+
+```bash
+# 一键安装所有依赖（Python包、Redis、Subfinder、Naabu、Strix）
+bash scripts/setup.sh
+
+# 编辑 .env 配置 LLM API Key
+nano .env
+
+# 终端 1: 启动 FastAPI
+python3 -m uvicorn app.main:app --reload --port 8000
+
+# 终端 2: 启动 Celery Worker
+celery -A app.tasks.celery_app worker --loglevel=info --concurrency=8
+
+# 终端 3: 启动 Streamlit 前端
+streamlit run streamlit_app.py
+
+# 访问 http://localhost:8501
+```
+
+`scripts/setup.sh` 做了什么：
+1. 检测系统 (macOS/Ubuntu)
+2. 安装 Python3 + pip
+3. `pip install -r requirements.txt`
+4. 安装并启动 Redis
+5. 安装 Subfinder (子域名发现)
+6. 安装 Naabu (端口扫描，可选)
+7. 安装 Strix (AI 安全扫描)
+8. 初始化数据库 + 创建 `.env`
+
 ## 📁 项目结构
 
 ```
