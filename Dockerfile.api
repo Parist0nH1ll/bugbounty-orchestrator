@@ -1,0 +1,30 @@
+# ==========================================
+# API 镜像 - FastAPI + 轻量级
+# ==========================================
+FROM python:3.11-slim
+
+ENV PYTHONUNBUFFERED=1
+ENV APP_HOME=/app
+
+WORKDIR /app
+
+# 系统依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Python 依赖
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 复制应用代码
+COPY app/ /app/app/
+COPY scripts/ /app/scripts/
+COPY streamlit_app.py /app/streamlit_app.py
+RUN chmod +x /app/scripts/*.sh
+
+# 创建数据目录
+RUN mkdir -p /app/data /app/scan_results /app/output
+
+# 默认启动 FastAPI
+CMD ["/app/scripts/entrypoint.api.sh"]

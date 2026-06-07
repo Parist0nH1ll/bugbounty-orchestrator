@@ -1,0 +1,63 @@
+# ==========================================
+# Worker 镜像 - 包含所有扫描工具
+# ==========================================
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+ENV APP_HOME=/app
+
+WORKDIR /app
+
+# --- 系统依赖 ---
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # 基础工具
+    ca-certificates \
+    curl \
+    wget \
+    git \
+    unzip \
+    gcc \
+    python3 \
+    python3-pip \
+    python3-dev \
+    # DNS 工具
+    dnsutils \
+    # 网络工具 (naabu 依赖)
+    libpcap-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# --- Python 依赖 ---
+COPY requirements.txt /app/requirements.txt
+RUN pip3 install --no-cache-dir -r requirements.txt
+
+# --- 安装 Subfinder ---
+RUN wget -q https://github.com/projectdiscovery/subfinder/releases/download/v2.6.6/subfinder_2.6.6_linux_amd64.zip \
+    -O /tmp/subfinder.zip && \
+    unzip /tmp/subfinder.zip -d /usr/local/bin/ subfinder && \
+    chmod +x /usr/local/bin/subfinder && \
+    rm /tmp/subfinder.zip
+
+# --- 安装 Naabu (端口扫描) ---
+RUN wget -q https://github.com/projectdiscovery/naabu/releases/download/v2.3.1/naabu_2.3.1_linux_amd64.zip \
+    -O /tmp/naabu.zip && \
+    unzip /tmp/naabu.zip -d /usr/local/bin/ naabu && \
+    chmod +x /usr/local/bin/naabu && \
+    rm /tmp/naabu.zip
+
+# --- 安装 Strix (AI 驱动安全扫描工具) ---
+# 来源: https://github.com/usestrix/strix | pip install strix-agent
+# 也可使用 Docker 镜像: docker pull ghcr.io/usestrix/strix-agent:latest
+RUN pip3 install --no-cache-dir strix-agent && \
+    which strix || echo "strix installed at $(python3 -c 'import strix_agent; print(strix_agent.__path__[0])')"
+
+# --- 复制应用代码 ---
+COPY app/ /app/app/
+COPY scripts/ /app/scripts/
+RUN chmod +x /app/scripts/*.sh
+
+# --- 创建数据目录 ---
+RUN mkdir -p /app/data /app/scan_results /app/output
+
+# --- 默认启动 worker ---
+CMD ["/app/scripts/entrypoint.worker.sh"]

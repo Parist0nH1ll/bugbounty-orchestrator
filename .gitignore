@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 环境变量
+.env
+
+# 数据
+data/
+*.db
+*.sqlite3
+
+# 临时文件
+tmp/
+*.log
+output/
+scan_results/
+
+# 前端
+frontend/node_modules/
+frontend/dist/
+
+# Docker
+docker-compose.override.yml
