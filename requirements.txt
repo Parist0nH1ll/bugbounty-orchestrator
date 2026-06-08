@@ -35,3 +35,7 @@ aiohttp==3.9.5
 
 # YAML config
 pyyaml==6.0.1
+
+# Streamlit (前端)
+streamlit==1.36.0
+pandas==2.2.0

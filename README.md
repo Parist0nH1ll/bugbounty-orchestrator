@@ -106,29 +106,145 @@ orchestrator/
 └── .env.example
 ```
 
-## 🔧 核心流程
+## 🏗️ 系统架构
+
+### 服务拓扑
 
 ```
-用户上传域名文件
-   │
-   ▼
-[1] Subfinder 子域名发现 (并行 per domain)
-   │
-   ▼
-[2] DNS 解析确认 (A/AAAA/CNAME, 并发 50)
-   │
-   ▼
-[3] 重点资产筛选 (关键词/正则匹配)
-   │
-   ▼
-[4] Strix 漏洞扫描 (并行 per asset)
-   │
-   ▼
-[5] LLM AI 智能分析 (高危漏洞提取)
-   │
-   ▼
-输出：Web 报告 + CSV 导出
+                          ┌──────────────┐
+                          │   Nginx/     │  (可选)
+                          │   Streamlit  │
+                          │   :80/:8501  │
+                          └──────┬───────┘
+                                 │ HTTP/WS
+                                 ▼
+┌──────────┐  Redis   ┌──────────────────┐  SQLite/   ┌──────────────┐
+│  Redis   │◄───────►│     FastAPI       │◄──────────►│   SQLite /   │
+│  :6379   │ pub/sub │     :8000         │  SQLAlchemy│  PostgreSQL  │
+│ 队列/缓存 │         │  ┌──────────────┐ │            └──────────────┘
+└────┬─────┘         │  │  WebSocket   │ │
+     │               │  │  /ws/{task}  │ │
+     │ 任务投递       │  │  实时日志推送  │ │
+     ▼               │  └──────────────┘ │
+┌──────────────────┐  └──────────────────┘
+│  Celery Worker   │
+│  --concurrency=8 │
+│  ┌──────────────┐│
+│  │ 5 个任务队列:  ││
+│  │ subdomain     ││        ┌──────────────┐
+│  │ dns           ││        │  Docker Hub  │
+│  │ scan ─────────┼┼───────►│  ghcr.io/    │
+│  │ ai            ││        │  usestrix/   │
+│  │ default       ││        │  strix-agent │
+│  └──────────────┘│        │  :latest     │
+└──────────────────┘        └──────┬───────┘
+     │                            │
+     │ docker run                  │ 内嵌 glibc
+     ▼                            ▼
+┌──────────────────────────────────────────┐
+│          Strix 沙箱                       │
+│  ghcr.io/usestrix/strix-sandbox:1.0.0    │
+│  (AI 渗透测试隔离执行环境)                  │
+└──────────────────────────────────────────┘
 ```
+
+### 请求生命周期
+
+```
+POST /api/upload/domains
+  │
+  ├─► 上传 .txt 文件, 逐行解析域名
+  ├─► 生成 task_id (UUID8)
+  └─► launch_pipeline(task_id, domains)
+        │
+        ▼
+  ┌─────────────────────────────────────────────────┐
+  │ Celery Chain (= 严格顺序, │= 并行)               │
+  │                                                 │
+  │  Step 1: group(discover_subdomains)             │
+  │          │每个根域名并行调用 subfinder           │
+  │          │结果写入 domains 表                    │
+  │          ▼                                      │
+  │  Step 2: resolve_all_subdomains                 │
+  │          │asyncio 并发 50 个 A/AAAA/CNAME 查询   │
+  │          │过滤未解析域名,写入 dns_records        │
+  │          ▼                                      │
+  │  Step 3: filter_key_assets                      │
+  │          │从 filter_rules 表读取关键词/正则       │
+  │          │匹配的域名写入 assets 表,标记优先级      │
+  │          ▼                                      │
+  │  Step 4: group(scan_asset) + .join()            │
+  │          │每个资产并行 docker run strix-agent     │
+  │          │--concurrency=8 控制同时扫描数          │
+  │          │结果写入 vulnerabilities 表            │
+  │          │.join() 阻塞直到全部完成                │
+  │          ▼                                      │
+  │  Step 5: analyze_with_ai                        │
+  │          │收集所有 strix 原始输出                 │
+  │          │发送给 LLM (OpenAI/Claude/DeepSeek)    │
+  │          │解析 JSON 响应,回写 vulnerability 记录  │
+  │          ▼                                      │
+  │  Callback: on_pipeline_success                  │
+  │          │更新 task.status = "completed"         │
+  │          │刷新各计数器                           │
+  │          │Redis pub → WebSocket → 前端通知       │
+  └─────────────────────────────────────────────────┘
+```
+
+### Strix Docker 沙箱（解决 glibc 兼容问题）
+
+```
+strix_wrapper.py
+  │ subprocess.run(["strix", "--target", url, ...])
+  ▼
+/usr/local/bin/strix   ← strix-docker-wrapper.sh 透明代理
+  │ docker run --rm --network host
+  │   -v /var/run/docker.sock:/var/run/docker.sock
+  │   -e STRIX_LLM=$STRIX_LLM  -e LLM_API_KEY=$LLM_API_KEY
+  │   ghcr.io/usestrix/strix-agent:latest "$@"
+  ▼
+┌──────────────────────────────┐
+│ strix-agent 镜像              │
+│ ✅ Go 编译, 内嵌正确 glibc     │  ← 与宿主机 glibc 完全隔离
+│ ✅ 独立 LLM 配置               │
+│    │                          │
+│    │ 渗透测试时:               │
+│    ▼                          │
+│ docker run ghcr.io/usestrix/  │
+│   strix-sandbox:1.0.0         │  ← 代码执行隔离沙箱
+└──────────────────────────────┘
+```
+
+### 数据模型
+
+```
+┌──────────┐     ┌──────────┐     ┌──────────┐     ┌───────────────┐
+│  Task    │────→│  Domain  │────→│  Asset   │────→│ Vulnerability │
+├──────────┤     ├──────────┤     ├──────────┤     ├───────────────┤
+│ id       │     │ id       │     │ id       │     │ id            │
+│ status   │     │ task_id  │     │ task_id  │     │ task_id       │
+│ progress │     │ root_dom │     │ domain   │     │ asset_id      │
+│ step     │     │ subdomain│     │ ips      │     │ cve_id        │
+│ counts   │     │ resolved │     │ priority │     │ risk_score    │
+│ context  │     │ ips      │     │ rules    │     │ component     │
+│ error    │     │ source   │     │ ports    │     │ description   │
+└──────────┘     └────┬─────┘     │ scanned  │     │ remediation   │
+                      │           └──────────┘     │ raw_result    │
+                      │                            │ ai_analysis   │
+                      ▼                            └───────────────┘
+               ┌──────────┐
+               │DNSRecord │         ┌────────────┐
+               ├──────────┤         │ FilterRule │
+               │ subdomain│         ├────────────┤
+               │ type     │         │ name       │
+               │ value    │         │ rule_type  │
+               │ ttl      │         │ pattern    │
+               └──────────┘         │ priority   │
+                                    │ enabled    │
+                                    └────────────┘
+```
+
+## 🔧 核心流程
 
 ## 🎯 重点资产筛选规则
 
@@ -171,8 +287,8 @@ orchestrator/
 - **数据库**：SQLite (默认) / PostgreSQL
 - **子域名**：Subfinder (自动安装)
 - **端口扫描**：Naabu / Python Socket
-- **漏洞扫描**：Strix (需自行安装或挂载)
-- **AI 分析**：OpenAI API 兼容 (支持 Ollama 等代理)
+- **漏洞扫描**：Strix（通过 Docker 镜像运行，解决 glibc 兼容问题）
+- **AI 分析**：OpenAI 兼容接口（支持 Claude、DeepSeek、Ollama 等）
 - **前端 A**：Streamlit (快速原型)
 - **前端 B**：Vue 3 + Element Plus + Nginx
 - **容器化**：Docker Compose
@@ -195,4 +311,3 @@ STRIX_PATH=/usr/local/bin/strix
 ## 📝 License
 
 MIT
-# bugbounty-orchestrator
