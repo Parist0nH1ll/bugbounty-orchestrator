@@ -1,6 +1,6 @@
 # ==========================================
 # Worker 镜像 - 包含所有扫描工具
-# Ubuntu 24.04 提供 Python 3.12+，满足 strix-agent 最低要求
+# Strix 通过 Docker 沙箱镜像运行，无需担心 glibc 兼容性
 # ==========================================
 FROM ubuntu:24.04
 
@@ -22,19 +22,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
     python3-dev \
-    python3-venv \
-    pipx \
     # DNS 工具
     dnsutils \
     # 网络工具 (naabu 依赖)
     libpcap-dev \
-    # Docker CLI（strix 沙箱依赖 ghcr.io/usestrix/strix-sandbox）
+    # Docker CLI（strix 通过 docker run 调用官方镜像 + 沙箱）
     docker.io \
     && rm -rf /var/lib/apt/lists/*
-
-# --- 确保 pipx 在 PATH ---
-ENV PATH="/root/.local/bin:$PATH"
-RUN pipx ensurepath
 
 # --- Python 依赖 ---
 COPY requirements.txt /app/requirements.txt
@@ -54,17 +48,11 @@ RUN wget -q https://github.com/projectdiscovery/naabu/releases/download/v2.3.1/n
     chmod +x /usr/local/bin/naabu && \
     rm /tmp/naabu.zip
 
-# --- Strix 安装脚本（本地 fallback） ---
-COPY scripts/install-strix.sh /tmp/install-strix.sh
-
-# --- 安装 Strix (AI 驱动安全扫描) ---
-# 官方安装: curl -sSL https://strix.ai/install | bash
-# 网络不可达时回退到本地脚本（从 GitHub Releases 下载二进制）
-# Strix 依赖 Docker 沙箱: ghcr.io/usestrix/strix-sandbox:1.0.0
-RUN curl -sSL https://strix.ai/install | bash 2>/dev/null || \
-    bash /tmp/install-strix.sh && \
-    cp $HOME/.strix/bin/strix /usr/local/bin/strix && \
-    strix --version
+# --- Strix Docker 透明代理（避免 glibc 版本兼容问题）---
+# strix 二进制对 glibc 版本敏感，通过官方 Docker 镜像运行
+# 镜像 ghcr.io/usestrix/strix-agent:latest 内含编译好的二进制 + 正确 glibc
+COPY scripts/strix-docker-wrapper.sh /usr/local/bin/strix
+RUN chmod +x /usr/local/bin/strix
 
 # --- 复制应用代码 ---
 COPY app/ /app/app/

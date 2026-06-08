@@ -179,38 +179,39 @@ install_naabu() {
 # -----------------------------------------------------------
 install_strix() {
     log_step "6/8 Strix (AI 驱动安全扫描)"
-    # Strix 是二进制 + Docker 沙箱架构
-    # 官方安装: curl -sSL https://strix.ai/install | bash
-    # 本地 fallback: bash scripts/install-strix.sh
+    # strix 二进制对 glibc 版本有要求，通过 Docker 镜像运行避免兼容问题
+    # 镜像: ghcr.io/usestrix/strix-agent:latest
 
-    if command -v strix &>/dev/null; then
-        log_info "strix 已安装: $(strix --version 2>&1 | head -1)"
+    WRAPPER="/usr/local/bin/strix"
+
+    if [ -f "$WRAPPER" ] && grep -q "strix-agent" "$WRAPPER" 2>/dev/null; then
+        log_info "strix Docker wrapper 已就绪"
+    else
+        log_info "安装 strix Docker 透明代理到 $WRAPPER"
+        sudo cp "$PROJECT_DIR/scripts/strix-docker-wrapper.sh" "$WRAPPER"
+        sudo chmod +x "$WRAPPER"
+    fi
+
+    if ! command -v docker &>/dev/null; then
+        log_error "Docker 未安装，strix 不可用"
+        log_warn "Strix 需要 Docker 来运行官方镜像和沙箱环境"
         return
     fi
 
-    log_info "正在安装 strix..."
-
-    # 优先用官方在线脚本
-    if curl -sSL --connect-timeout 5 https://strix.ai/install | bash 2>/dev/null; then
-        log_info "strix (在线安装) 完成"
-    elif [ -f "$PROJECT_DIR/scripts/install-strix.sh" ]; then
-        log_warn "在线安装失败，使用本地脚本..."
-        bash "$PROJECT_DIR/scripts/install-strix.sh"
+    # 预拉取镜像
+    STRIX_IMAGE="ghcr.io/usestrix/strix-agent:latest"
+    if docker image inspect "$STRIX_IMAGE" &>/dev/null 2>&1; then
+        log_info "strix 镜像已存在"
     else
-        log_error "strix 安装失败，本地 fallback 脚本也不存在"
-        log_warn "不影响主流程（扫描时将使用 mock 结果）"
-        return
+        log_info "拉取 strix 镜像: $STRIX_IMAGE"
+        docker pull "$STRIX_IMAGE" 2>&1 | tail -3
+        log_info "镜像拉取完成"
     fi
 
-    # 复制到系统 PATH
-    if [ -f "$HOME/.strix/bin/strix" ]; then
-        sudo cp "$HOME/.strix/bin/strix" /usr/local/bin/strix 2>/dev/null || true
-    fi
-
-    if command -v strix &>/dev/null; then
-        log_info "strix 安装成功: $(strix --version 2>&1 | head -1)"
+    if strix --version &>/dev/null 2>&1; then
+        log_info "strix (Docker) 可用: $(strix --version 2>&1 | head -1)"
     else
-        log_warn "strix 命令未找到，可能需要: source ~/.bashrc"
+        log_warn "strix wrapper 验证失败，检查 Docker 是否正常运行"
     fi
 }
 
