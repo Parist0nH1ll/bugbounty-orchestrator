@@ -263,12 +263,39 @@ final_check() {
     if $all_ok; then
         echo -e "${GREEN}所有必需依赖已就绪！${NC}"
         echo ""
+        echo "  重新配置:       python3 scripts/configure.py"
         echo "  启动 API 服务:  python3 -m uvicorn app.main:app --reload --port 8000"
         echo "  启动 Worker:    celery -A app.tasks.celery_app worker -l info -c 8"
         echo "  启动前端:       streamlit run streamlit_app.py"
-        echo "  编辑配置:       nano .env"
     else
         echo -e "${RED}部分必需依赖缺失，请检查后重试${NC}"
+    fi
+}
+
+# -----------------------------------------------------------
+# 8. 交互式配置向导
+# -----------------------------------------------------------
+configure_interactive() {
+    log_step "8/8 交互式配置"
+    if [ -f .env ] && grep -q "sk-your-key-here" .env 2>/dev/null; then
+        echo ""
+        echo -e "${YELLOW}检测到 .env 中 LLM_API_KEY 仍为占位值。${NC}"
+        echo -e "${YELLOW}强烈建议运行配置向导来设置 LLM 提供商...${NC}"
+        echo ""
+    fi
+    if [ -t 0 ]; then
+        # 在交互式终端中才会询问
+        read -p "$(echo -e ${CYAN}是否现在运行交互式配置向导？[Y/n]: ${NC})" run_configure
+        run_configure=${run_configure:-Y}
+        if [[ "$run_configure" =~ ^[Yy] ]]; then
+            python3 scripts/configure.py
+        else
+            log_info "跳过配置。可稍后运行: python3 scripts/configure.py"
+            log_warn "请手动编辑 .env 填入 LLM_API_KEY"
+        fi
+    else
+        log_info "非交互模式，跳过配置向导"
+        log_warn "请运行: python3 scripts/configure.py 或手动编辑 .env"
     fi
 }
 
@@ -291,3 +318,4 @@ install_naabu
 install_strix
 init_project
 final_check
+configure_interactive
