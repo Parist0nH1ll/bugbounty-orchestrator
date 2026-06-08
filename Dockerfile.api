@@ -1,7 +1,7 @@
 # ==========================================
 # API 镜像 - FastAPI + 轻量级
 # ==========================================
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 ENV PYTHONUNBUFFERED=1
 ENV APP_HOME=/app

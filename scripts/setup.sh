@@ -186,32 +186,36 @@ install_strix() {
         return
     fi
 
-    log_warn "strix 未检测到，正在安装 strix-agent..."
+    # Python 版本检查：strix-agent 要求 Python >= 3.12
+    PY_VER=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+    PY_MAJOR=$(echo "$PY_VER" | cut -d. -f1)
+    PY_MINOR=$(echo "$PY_VER" | cut -d. -f2)
+    if [ "$PY_MAJOR" -lt 3 ] || { [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 12 ]; }; then
+        log_warn "Python 版本 $PY_VER < 3.12，不满足 strix-agent 要求"
+        log_warn "跳过 strix 安装。可选方案："
+        log_warn "  1. 升级 Python 到 3.12+ 后重试"
+        log_warn "  2. 使用 Docker: docker pull ghcr.io/usestrix/strix-agent:latest"
+        log_warn "不影响主流程（扫描时将使用 mock 结果）"
+        return
+    fi
 
-    # 策略 1: pipx（推荐，隔离环境）
+    log_warn "strix 未检测到，正在通过 pipx 安装 strix-agent..."
+
+    # pipx（官方推荐方式，隔离环境避免依赖冲突）
     if command -v pipx &>/dev/null; then
-        log_info "通过 pipx 安装 strix-agent..."
-        pipx install strix-agent 2>&1 | tail -1
-        # pipx 安装后确保在 PATH
+        log_info "pipx install strix-agent..."
+        pipx install strix-agent 2>&1 | tail -3
         pipx ensurepath 2>/dev/null || true
         export PATH="$HOME/.local/bin:$PATH"
     else
-        # 策略 2: 安装 pipx 再用
-        log_info "先安装 pipx..."
+        log_info "安装 pipx..."
         if $PIP install pipx -q 2>/dev/null; then
             pipx ensurepath 2>/dev/null || true
             export PATH="$HOME/.local/bin:$PATH"
-            log_info "通过 pipx 安装 strix-agent..."
-            pipx install strix-agent 2>&1 | tail -1
-            # 如果 pipx 安装了但 strix 还是找不到，刷新 PATH
+            log_info "pipx install strix-agent..."
+            pipx install strix-agent 2>&1 | tail -3
             export PATH="$HOME/.local/bin:$PATH"
         fi
-    fi
-
-    # 策略 3: 纯 pip 回退
-    if ! command -v strix &>/dev/null; then
-        log_info "pipx 未成功，回退到 pip 直接安装 strix-agent..."
-        $PIP install strix-agent -q 2>&1 | tail -1
     fi
 
     # 最终验证
@@ -219,10 +223,9 @@ install_strix() {
         log_info "strix 安装成功: $(strix --version 2>&1 | head -1)"
     else
         log_warn "strix 安装后仍无法找到命令（可能是 PATH 问题）"
-        log_warn "手动尝试: pipx install strix-agent && pipx ensurepath"
-        log_warn "或: pip install strix-agent"
+        log_warn "尝试: source ~/.bashrc && strix --version"
+        log_warn "或使用 Docker 镜像: docker pull ghcr.io/usestrix/strix-agent:latest"
         log_warn "不影响主流程（扫描时将使用 mock 结果）"
-        log_warn "安装后请重新打开终端或执行: source ~/.bashrc"
     fi
 }
 
