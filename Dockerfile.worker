@@ -28,6 +28,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     dnsutils \
     # 网络工具 (naabu 依赖)
     libpcap-dev \
+    # Docker CLI（strix 沙箱依赖 ghcr.io/usestrix/strix-sandbox）
+    docker.io \
     && rm -rf /var/lib/apt/lists/*
 
 # --- 确保 pipx 在 PATH ---
@@ -52,13 +54,17 @@ RUN wget -q https://github.com/projectdiscovery/naabu/releases/download/v2.3.1/n
     chmod +x /usr/local/bin/naabu && \
     rm /tmp/naabu.zip
 
+# --- Strix 安装脚本（本地 fallback） ---
+COPY scripts/install-strix.sh /tmp/install-strix.sh
+
 # --- 安装 Strix (AI 驱动安全扫描) ---
-# 来源: https://github.com/usestrix/strix
-# 安装方式: pipx install strix-agent  (需 Python 3.12+，Ubuntu 24.04 满足)
-# 备用方案: 官方 Docker 镜像 docker pull ghcr.io/usestrix/strix-agent:latest
-RUN pipx install strix-agent && \
-    pipx ensurepath && \
-    which strix && strix --version || echo "[warn] strix not on PATH after pipx install"
+# 官方安装: curl -sSL https://strix.ai/install | bash
+# 网络不可达时回退到本地脚本（从 GitHub Releases 下载二进制）
+# Strix 依赖 Docker 沙箱: ghcr.io/usestrix/strix-sandbox:1.0.0
+RUN curl -sSL https://strix.ai/install | bash 2>/dev/null || \
+    bash /tmp/install-strix.sh && \
+    cp $HOME/.strix/bin/strix /usr/local/bin/strix && \
+    strix --version
 
 # --- 复制应用代码 ---
 COPY app/ /app/app/

@@ -44,7 +44,7 @@ def run_strix_scan(
     # 检测 strix 是否可用（pip install 后通常在 PATH 中，which strix 验证）
     strix_available = _check_strix_available(strix_path)
     if not strix_available:
-        logger.warning(f"strix not found. Install with: pip install strix-agent")
+        logger.warning(f"strix not found. Install with: curl -sSL https://strix.ai/install | bash")
         return _mock_strix_result(target, output_file, context)
 
     # 构建指令：target 如果是域名则补全 https://
@@ -105,7 +105,7 @@ def run_strix_scan(
 # ==================== 辅助函数 ====================
 
 def _check_strix_available(strix_path: str) -> bool:
-    """检测 strix 是否可用（pip install strix-agent 后命令名为 strix）"""
+    """检测 strix 是否可用（二进制安装到 ~/.strix/bin/strix 或 /usr/local/bin/strix）"""
     if os.path.exists(strix_path):
         return True
     # 如果配置的路径不存在，尝试 which 查找
@@ -207,7 +207,7 @@ def _mock_strix_result(target: str, output_file: str, context: Dict) -> Dict:
                 "description": f"Missing Content-Security-Policy header on {target}",
             },
         ],
-        "note": "This is a mock result - install strix via: pip install strix-agent",
+        "note": "This is a mock result - install: curl -sSL https://strix.ai/install | bash",
         "context_used": context,
     }
 

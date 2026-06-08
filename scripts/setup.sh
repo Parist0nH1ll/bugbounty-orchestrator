@@ -179,53 +179,38 @@ install_naabu() {
 # -----------------------------------------------------------
 install_strix() {
     log_step "6/8 Strix (AI 驱动安全扫描)"
+    # Strix 是二进制 + Docker 沙箱架构
+    # 官方安装: curl -sSL https://strix.ai/install | bash
+    # 本地 fallback: bash scripts/install-strix.sh
 
-    # 检测 strix 命令
     if command -v strix &>/dev/null; then
         log_info "strix 已安装: $(strix --version 2>&1 | head -1)"
         return
     fi
 
-    # Python 版本检查：strix-agent 要求 Python >= 3.12
-    PY_VER=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-    PY_MAJOR=$(echo "$PY_VER" | cut -d. -f1)
-    PY_MINOR=$(echo "$PY_VER" | cut -d. -f2)
-    if [ "$PY_MAJOR" -lt 3 ] || { [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 12 ]; }; then
-        log_warn "Python 版本 $PY_VER < 3.12，不满足 strix-agent 要求"
-        log_warn "跳过 strix 安装。可选方案："
-        log_warn "  1. 升级 Python 到 3.12+ 后重试"
-        log_warn "  2. 使用 Docker: docker pull ghcr.io/usestrix/strix-agent:latest"
+    log_info "正在安装 strix..."
+
+    # 优先用官方在线脚本
+    if curl -sSL --connect-timeout 5 https://strix.ai/install | bash 2>/dev/null; then
+        log_info "strix (在线安装) 完成"
+    elif [ -f "$PROJECT_DIR/scripts/install-strix.sh" ]; then
+        log_warn "在线安装失败，使用本地脚本..."
+        bash "$PROJECT_DIR/scripts/install-strix.sh"
+    else
+        log_error "strix 安装失败，本地 fallback 脚本也不存在"
         log_warn "不影响主流程（扫描时将使用 mock 结果）"
         return
     fi
 
-    log_warn "strix 未检测到，正在通过 pipx 安装 strix-agent..."
-
-    # pipx（官方推荐方式，隔离环境避免依赖冲突）
-    if command -v pipx &>/dev/null; then
-        log_info "pipx install strix-agent..."
-        pipx install strix-agent 2>&1 | tail -3
-        pipx ensurepath 2>/dev/null || true
-        export PATH="$HOME/.local/bin:$PATH"
-    else
-        log_info "安装 pipx..."
-        if $PIP install pipx -q 2>/dev/null; then
-            pipx ensurepath 2>/dev/null || true
-            export PATH="$HOME/.local/bin:$PATH"
-            log_info "pipx install strix-agent..."
-            pipx install strix-agent 2>&1 | tail -3
-            export PATH="$HOME/.local/bin:$PATH"
-        fi
+    # 复制到系统 PATH
+    if [ -f "$HOME/.strix/bin/strix" ]; then
+        sudo cp "$HOME/.strix/bin/strix" /usr/local/bin/strix 2>/dev/null || true
     fi
 
-    # 最终验证
     if command -v strix &>/dev/null; then
         log_info "strix 安装成功: $(strix --version 2>&1 | head -1)"
     else
-        log_warn "strix 安装后仍无法找到命令（可能是 PATH 问题）"
-        log_warn "尝试: source ~/.bashrc && strix --version"
-        log_warn "或使用 Docker 镜像: docker pull ghcr.io/usestrix/strix-agent:latest"
-        log_warn "不影响主流程（扫描时将使用 mock 结果）"
+        log_warn "strix 命令未找到，可能需要: source ~/.bashrc"
     fi
 }
 
