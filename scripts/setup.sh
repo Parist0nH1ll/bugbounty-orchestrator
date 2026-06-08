@@ -37,7 +37,7 @@ detect_os() {
 # 1. Python3 + pip
 # -----------------------------------------------------------
 install_python() {
-    log_step "1/7 Python3 + pip"
+    log_step "1/8 Python3 + pip"
     if command -v python3 &>/dev/null; then
         log_info "python3 已安装: $(python3 --version)"
     else
@@ -65,7 +65,7 @@ install_python() {
 # 2. Python 依赖包
 # -----------------------------------------------------------
 install_python_deps() {
-    log_step "2/7 Python 依赖包"
+    log_step "2/8 Python 依赖包"
     cd "$PROJECT_DIR"
     $PIP install --upgrade pip -q
     $PIP install -r requirements.txt -q
@@ -76,7 +76,7 @@ install_python_deps() {
 # 3. Redis
 # -----------------------------------------------------------
 install_redis() {
-    log_step "3/7 Redis"
+    log_step "3/8 Redis"
     if command -v redis-server &>/dev/null && redis-cli ping &>/dev/null; then
         log_info "Redis 已运行: $(redis-cli --version)"
         return
@@ -114,7 +114,7 @@ install_redis() {
 # 4. Subfinder
 # -----------------------------------------------------------
 install_subfinder() {
-    log_step "4/7 Subfinder (子域名发现)"
+    log_step "4/8 Subfinder (子域名发现)"
     if command -v subfinder &>/dev/null; then
         log_info "subfinder 已安装: $(subfinder -version 2>&1 | head -1)"
         return
@@ -146,7 +146,7 @@ install_subfinder() {
 # 5. Naabu (可选)
 # -----------------------------------------------------------
 install_naabu() {
-    log_step "5/7 Naabu (快速端口扫描，可选)"
+    log_step "5/8 Naabu (快速端口扫描，可选)"
     if command -v naabu &>/dev/null; then
         log_info "naabu 已安装: $(naabu -version 2>&1 | head -1)"
         return
@@ -178,37 +178,59 @@ install_naabu() {
 # 6. Strix (AI 安全扫描)
 # -----------------------------------------------------------
 install_strix() {
-    log_step "6/7 Strix (AI 驱动安全扫描)"
+    log_step "6/8 Strix (AI 驱动安全扫描)"
+
+    # 检测 strix 命令
     if command -v strix &>/dev/null; then
         log_info "strix 已安装: $(strix --version 2>&1 | head -1)"
         return
     fi
 
-    log_warn "正在通过 pip 安装 strix-agent..."
+    log_warn "strix 未检测到，正在安装 strix-agent..."
 
-    # 尝试 pipx（推荐）
+    # 策略 1: pipx（推荐，隔离环境）
     if command -v pipx &>/dev/null; then
-        pipx install strix-agent 2>/dev/null && log_info "strix (pipx) 安装完成" && return
+        log_info "通过 pipx 安装 strix-agent..."
+        pipx install strix-agent 2>&1 | tail -1
+        # pipx 安装后确保在 PATH
+        pipx ensurepath 2>/dev/null || true
+        export PATH="$HOME/.local/bin:$PATH"
     else
-        # 安装 pipx
-        $PIP install pipx -q 2>/dev/null
-        if command -v pipx &>/dev/null; then
-            pipx install strix-agent 2>/dev/null && log_info "strix (pipx) 安装完成" && return
+        # 策略 2: 安装 pipx 再用
+        log_info "先安装 pipx..."
+        if $PIP install pipx -q 2>/dev/null; then
+            pipx ensurepath 2>/dev/null || true
+            export PATH="$HOME/.local/bin:$PATH"
+            log_info "通过 pipx 安装 strix-agent..."
+            pipx install strix-agent 2>&1 | tail -1
+            # 如果 pipx 安装了但 strix 还是找不到，刷新 PATH
+            export PATH="$HOME/.local/bin:$PATH"
         fi
     fi
 
-    # 回退到 pip
-    $PIP install strix-agent -q 2>/dev/null && log_info "strix (pip) 安装完成" && return
+    # 策略 3: 纯 pip 回退
+    if ! command -v strix &>/dev/null; then
+        log_info "pipx 未成功，回退到 pip 直接安装 strix-agent..."
+        $PIP install strix-agent -q 2>&1 | tail -1
+    fi
 
-    log_warn "strix 安装失败。不影响主流程（将使用 mock 结果）"
-    log_warn "手动安装: pipx install strix-agent 或 pip install strix-agent"
+    # 最终验证
+    if command -v strix &>/dev/null; then
+        log_info "strix 安装成功: $(strix --version 2>&1 | head -1)"
+    else
+        log_warn "strix 安装后仍无法找到命令（可能是 PATH 问题）"
+        log_warn "手动尝试: pipx install strix-agent && pipx ensurepath"
+        log_warn "或: pip install strix-agent"
+        log_warn "不影响主流程（扫描时将使用 mock 结果）"
+        log_warn "安装后请重新打开终端或执行: source ~/.bashrc"
+    fi
 }
 
 # -----------------------------------------------------------
 # 7. 初始化数据库 + 创建目录
 # -----------------------------------------------------------
 init_project() {
-    log_step "7/7 项目初始化"
+    log_step "7/8 项目初始化"
     cd "$PROJECT_DIR"
 
     mkdir -p data scan_results output
