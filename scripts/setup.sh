@@ -113,6 +113,20 @@ install_redis() {
 # -----------------------------------------------------------
 # 4. Subfinder
 # -----------------------------------------------------------
+# -----------------------------------------------------------
+# 带重试和镜像回退的下载函数（解决 GitHub 下载卡住问题）
+# -----------------------------------------------------------
+download_github_release() {
+    local url="$1"
+    local output="$2"
+    local mirror_url="https://ghproxy.com/${url}"
+    wget -q --tries=5 --retry-connrefused --timeout=30 --waitretry=15 -O "$output" "$url" || \
+    wget -q --tries=5 --retry-connrefused --timeout=30 --waitretry=15 -O "$output" "$mirror_url"
+}
+
+# -----------------------------------------------------------
+# 4. Subfinder
+# -----------------------------------------------------------
 install_subfinder() {
     log_step "4/8 Subfinder (子域名发现)"
     if command -v subfinder &>/dev/null; then
@@ -127,8 +141,8 @@ install_subfinder() {
             ;;
         linux)
             SUBFINDER_VER="2.6.6"
-            wget -q "https://github.com/projectdiscovery/subfinder/releases/download/v${SUBFINDER_VER}/subfinder_${SUBFINDER_VER}_linux_amd64.zip" \
-                -O /tmp/subfinder.zip
+            SUBFINDER_URL="https://github.com/projectdiscovery/subfinder/releases/download/v${SUBFINDER_VER}/subfinder_${SUBFINDER_VER}_linux_amd64.zip"
+            download_github_release "$SUBFINDER_URL" /tmp/subfinder.zip
             unzip -o /tmp/subfinder.zip -d /tmp/subfinder_out
             sudo mv /tmp/subfinder_out/subfinder /usr/local/bin/
             sudo chmod +x /usr/local/bin/subfinder
@@ -159,8 +173,8 @@ install_naabu() {
             ;;
         linux)
             NAABU_VER="2.3.1"
-            wget -q "https://github.com/projectdiscovery/naabu/releases/download/v${NAABU_VER}/naabu_${NAABU_VER}_linux_amd64.zip" \
-                -O /tmp/naabu.zip
+            NAABU_URL="https://github.com/projectdiscovery/naabu/releases/download/v${NAABU_VER}/naabu_${NAABU_VER}_linux_amd64.zip"
+            download_github_release "$NAABU_URL" /tmp/naabu.zip
             unzip -o /tmp/naabu.zip -d /tmp/naabu_out
             sudo mv /tmp/naabu_out/naabu /usr/local/bin/
             sudo chmod +x /usr/local/bin/naabu

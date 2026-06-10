@@ -36,16 +36,21 @@ RUN pip3 config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple &&
     pip3 install --no-cache-dir --default-timeout=120 --break-system-packages -r requirements.txt
 
 # --- 安装 Subfinder ---
-RUN wget -q https://github.com/projectdiscovery/subfinder/releases/download/v2.6.6/subfinder_2.6.6_linux_amd64.zip \
-    -O /tmp/subfinder.zip && \
-    unzip /tmp/subfinder.zip -d /usr/local/bin/ subfinder && \
+# 带重试 + GitHub 镜像回退，解决国内网络不稳定问题
+RUN GITHUB_URL="https://github.com/projectdiscovery/subfinder/releases/download/v2.6.6/subfinder_2.6.6_linux_amd64.zip" && \
+    MIRROR_URL="https://ghproxy.com/${GITHUB_URL}" && \
+    ( wget -q --tries=5 --retry-connrefused --timeout=30 --waitretry=15 -O /tmp/subfinder.zip "$GITHUB_URL" || \
+      wget -q --tries=5 --retry-connrefused --timeout=30 --waitretry=15 -O /tmp/subfinder.zip "$MIRROR_URL" ) && \
+    unzip -o /tmp/subfinder.zip -d /usr/local/bin/ subfinder && \
     chmod +x /usr/local/bin/subfinder && \
     rm /tmp/subfinder.zip
 
 # --- 安装 Naabu (端口扫描) ---
-RUN wget -q https://github.com/projectdiscovery/naabu/releases/download/v2.3.1/naabu_2.3.1_linux_amd64.zip \
-    -O /tmp/naabu.zip && \
-    unzip /tmp/naabu.zip -d /usr/local/bin/ naabu && \
+RUN GITHUB_URL="https://github.com/projectdiscovery/naabu/releases/download/v2.3.1/naabu_2.3.1_linux_amd64.zip" && \
+    MIRROR_URL="https://ghproxy.com/${GITHUB_URL}" && \
+    ( wget -q --tries=5 --retry-connrefused --timeout=30 --waitretry=15 -O /tmp/naabu.zip "$GITHUB_URL" || \
+      wget -q --tries=5 --retry-connrefused --timeout=30 --waitretry=15 -O /tmp/naabu.zip "$MIRROR_URL" ) && \
+    unzip -o /tmp/naabu.zip -d /usr/local/bin/ naabu && \
     chmod +x /usr/local/bin/naabu && \
     rm /tmp/naabu.zip
 
