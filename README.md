@@ -6,66 +6,119 @@
 
 ### 前置条件
 
-- Docker 20.10+ & Docker Compose 2.0+
-- （可选）已安装 Subfinder / Naabu / Strix 或由 Docker 自动下载
+- **Docker** 20.10+（[安装指南](https://docs.docker.com/get-docker/)）
+- **Docker Compose** v2（`docker compose` 命令可用，不是旧版 `docker-compose`）
+- 一个 **LLM API Key**（OpenAI / Claude / DeepSeek / Ollama 任选一个）
 
-### 一键部署
+### 5 分钟上手
 
 ```bash
 # 1. 克隆项目
-git clone <your-repo-url> orchestrator
+git clone https://github.com/your-org/orchestrator.git
 cd orchestrator
 
-# 2. 配置环境变量
+# 2. 创建配置文件
 cp .env.example .env
-# 编辑 .env，填入你的 LLM API KEY（OpenAI / Ollama）
-
-# 3. 启动所有服务
-docker-compose up -d
-
-# 4. 查看运行状态
-docker-compose ps
 ```
+
+编辑 `.env`，只需填一行：
+```bash
+LLM_API_KEY=sk-your-api-key-here
+```
+其他配置有合理默认值，可以不动。
+
+```bash
+# 3. 构建并启动（首次构建约 3-5 分钟，下载依赖和工具）
+docker compose build
+docker compose up -d
+
+# 4. 确认所有服务正常
+docker compose ps
+```
+
+预期输出：
+```
+NAME                  STATUS
+orchestrator_api_1     running
+orchestrator_worker_1  running
+orchestrator_streamlit_1 running
+orchestrator_redis_1   running (healthy)
+```
+
+```bash
+# 5. 打开浏览器
+open http://localhost:8501
+```
+
+### 使用流程
+
+1. 在 Streamlit 页面左侧选择 **📤 域名上传**
+2. 上传一个 `.txt` 文件（每行一个根域名，如 `example.com`），或直接在文本框输入
+3. 点击 **🚀 启动扫描流水线**
+4. 等待流水线完成（进度和日志通过 WebSocket 实时推送）
+5. 在 **📊 漏洞报告** 页面查看结果，可导出 CSV
 
 ### 服务端口
 
-| 服务 | 端口 | 说明 |
-|------|------|------|
-| FastAPI | 8000 | 后端 API 接口 |
-| Streamlit | 8501 | Web 控制台（快速原型） |
-| Redis | 6379 | 消息队列 & 缓存 |
-| Celery Worker | - | 后台任务执行 |
+| 服务 | 端口 | 用途 |
+|------|:---:|------|
+| Streamlit 前端 | `8501` | Web 控制台，上传域名、查看报告 |
+| FastAPI | `8000` | 后端 API，Swagger 文档在 `/docs` |
+| Redis | `6379` | Celery 任务队列 + WebSocket 消息广播 |
+| Celery Worker | - | 后台执行扫描任务，默认 8 并发 |
 
-### 本地开发（不使用 Docker）
+### 常用命令
 
 ```bash
-# 一键安装所有依赖（Python包、Redis、Subfinder、Naabu、Strix）
-bash scripts/setup.sh
-
-# 编辑 .env 配置 LLM API Key
-nano .env
-
-# 终端 1: 启动 FastAPI
-python3 -m uvicorn app.main:app --reload --port 8000
-
-# 终端 2: 启动 Celery Worker
-celery -A app.tasks.celery_app worker --loglevel=info --concurrency=8
-
-# 终端 3: 启动 Streamlit 前端
-streamlit run streamlit_app.py
-
-# 访问 http://localhost:8501
+docker compose up -d              # 启动全部服务
+docker compose ps                 # 查看运行状态
+docker compose logs -f worker     # 实时查看 Worker 日志
+docker compose logs -f api        # 实时查看 API 日志
+docker compose restart worker     # 重启 Worker
+docker compose down               # 停止并清理容器
+docker compose down -v            # 同时删除数据卷（慎用！）
+docker compose build --no-cache   # 强制重新构建镜像
 ```
 
-`scripts/setup.sh` 做了什么：
-1. 检测系统 (macOS/Ubuntu)
-2. 安装 Python3 + pip
-3. `pip install -r requirements.txt`
-4. 安装并启动 Redis
-5. 安装 Subfinder (子域名发现)
-6. 安装 Naabu (端口扫描，可选)
-7. 安装 Strix (AI 安全扫描)
-8. 初始化数据库 + 创建 `.env`
+### 常见问题
+
+<details>
+<summary><b>构建时 GitHub 下载卡住或超时？</b></summary>
+
+Dockerfile 已内置重试逻辑（5 次重试）+ 自动回退到 `ghproxy.com` 镜像。
+如果 ghproxy 也不可用，可在 `.env` 中添加：
+```bash
+# 不使用镜像加速的 GitHub 备用域名
+# 或自行搭建 ghproxy，修改 Dockerfile 中的 MIRROR_URL
+```
+</details>
+
+<details>
+<summary><b>Streamlit 启动报 "executable file not found"？</b></summary>
+
+确保已重新构建：`docker compose build --no-cache streamlit && docker compose up -d`
+</details>
+
+<details>
+<summary><b>Worker 报 "strix not found"？</b></summary>
+
+Strix 通过 Docker 镜像运行，需要 Worker 容器能访问 Docker daemon。
+确保 `docker-compose.yml` 中 Worker 的 `volumes` 包含：
+```yaml
+- /var/run/docker.sock:/var/run/docker.sock
+```
+首次调用 strix 时会自动 `docker pull ghcr.io/usestrix/strix-agent:latest`。
+</details>
+
+<details>
+<summary><b>如何更换 LLM 提供商？</b></summary>
+
+运行交互式配置向导：
+```bash
+python3 scripts/configure.py
+```
+或在 `.env` 中手动修改 `LLM_API_BASE`、`LLM_API_KEY`、`LLM_MODEL`。
+</details>
 
 ## 📁 项目结构
 
