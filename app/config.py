@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     api_port: int = 8000
     frontend_port: int = 80
     streamlit_port: int = 8501
+    web_password: str = ""  # 留空不启用密码，设置后前端/API 都需要此密码
 
     # --- 路径 ---
     data_dir: str = "./data"

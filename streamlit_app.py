@@ -3,6 +3,7 @@ AI 漏洞挖掘平台 - Streamlit 前端
 提供：域名上传、任务管理、规则配置、Agent 对话、漏洞报告
 """
 import json
+import os
 import time
 import io
 import requests
@@ -19,6 +20,46 @@ st.set_page_config(
 
 API_BASE = "http://api:8000"
 WS_BASE = "ws://api:8000"
+
+# 从环境变量读取密码（Docker 容器内 pass，本地可从 .env 自动加载）
+WEB_PASSWORD = os.getenv("WEB_PASSWORD", "").strip()
+AUTH_ENABLED = bool(WEB_PASSWORD)
+
+# ==================== 登录守卫 ====================
+def check_password():
+    """密码登录页面——仅在 WEB_PASSWORD 非空时显示"""
+    if not AUTH_ENABLED:
+        st.session_state["authenticated"] = True
+        return
+
+    if st.session_state.get("authenticated"):
+        return
+
+    # 登录表单
+    st.markdown('<div class="main-header">🛡️ AI 漏洞挖掘平台</div>', unsafe_allow_html=True)
+    st.markdown("---")
+
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.markdown("### 🔐 请输入访问密码")
+        pwd = st.text_input("密码", type="password", key="login_pwd", placeholder="输入密码后回车")
+
+        if pwd:
+            if pwd == WEB_PASSWORD:
+                st.session_state["authenticated"] = True
+                st.rerun()
+            else:
+                st.error("密码错误，请重试")
+
+    st.stop()  # 未验证不允许继续
+
+check_password()
+
+# ==================== API 认证头 ====================
+def _auth_headers():
+    if AUTH_ENABLED:
+        return {"X-API-Key": WEB_PASSWORD}
+    return {}
 
 # ==================== 样式 ====================
 st.markdown("""
@@ -40,7 +81,7 @@ st.markdown("""
 def api_get(path: str):
     """GET 请求封装"""
     try:
-        resp = requests.get(f"{API_BASE}{path}", timeout=10)
+        resp = requests.get(f"{API_BASE}{path}", headers=_auth_headers(), timeout=10)
         resp.raise_for_status()
         return resp.json()
     except Exception as e:
@@ -52,9 +93,9 @@ def api_post(path: str, data: dict = None, files: dict = None):
     """POST 请求封装"""
     try:
         if files:
-            resp = requests.post(f"{API_BASE}{path}", files=files, timeout=30)
+            resp = requests.post(f"{API_BASE}{path}", files=files, headers=_auth_headers(), timeout=30)
         else:
-            resp = requests.post(f"{API_BASE}{path}", json=data, timeout=10)
+            resp = requests.post(f"{API_BASE}{path}", json=data, headers=_auth_headers(), timeout=10)
         resp.raise_for_status()
         return resp.json()
     except Exception as e:
@@ -65,7 +106,7 @@ def api_post(path: str, data: dict = None, files: dict = None):
 def api_put(path: str, data: dict):
     """PUT 请求封装"""
     try:
-        resp = requests.put(f"{API_BASE}{path}", json=data, timeout=10)
+        resp = requests.put(f"{API_BASE}{path}", json=data, headers=_auth_headers(), timeout=10)
         resp.raise_for_status()
         return resp.json()
     except Exception as e:
@@ -76,7 +117,7 @@ def api_put(path: str, data: dict):
 def api_delete(path: str):
     """DELETE 请求封装"""
     try:
-        resp = requests.delete(f"{API_BASE}{path}", timeout=10)
+        resp = requests.delete(f"{API_BASE}{path}", headers=_auth_headers(), timeout=10)
         resp.raise_for_status()
         return resp.json()
     except Exception as e:

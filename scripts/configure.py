@@ -284,7 +284,24 @@ def configure_advanced() -> dict:
     }
 
 
-def write_env_file(llm: dict, db: dict, redis: dict, tools: dict, advanced: dict):
+def configure_password() -> dict:
+    """设置 Web 访问密码"""
+    print(f"\n{c(BOLD, '━' * 50)}")
+    print(f"{c(BOLD, '🔐 步骤 6：Web 访问密码')}")
+    print(f"{c(BOLD, '━' * 50)}")
+
+    print(f"\n  {c(YELLOW, '为 Streamlit 前端和 API 设置访问密码。')}")
+    print(f"  {c(YELLOW, '留空则不启用密码保护，任何人均可访问。')}")
+
+    pwd = prompt("Web 访问密码（留空 = 不启用）", "")
+    if pwd:
+        print(f"  {c(GREEN, '✓')} 密码已设置（{len(pwd)} 个字符）")
+    else:
+        print(f"  {c(YELLOW, '⚠')} 未设置密码，前端和 API 将无需认证即可访问")
+    return {"web_password": pwd}
+
+
+def write_env_file(llm: dict, db: dict, redis: dict, tools: dict, advanced: dict, password: dict):
     """从 .env.example 模板生成 .env 文件"""
     print(f"\n{c(BOLD, '━' * 50)}")
     print(f"{c(BOLD, '📝 正在生成 .env 文件...')}")
@@ -333,7 +350,7 @@ def write_env_file(llm: dict, db: dict, redis: dict, tools: dict, advanced: dict
     print(f"  {c(YELLOW, '💡 你可以稍后编辑:')} nano {ENV_FILE}")
 
 
-def show_summary(llm: dict, db: dict):
+def show_summary(llm: dict, db: dict, password: dict):
     """显示配置摘要"""
     print(f"\n{c(BOLD, '╔══════════════════════════════════════════════╗')}")
     print(f"{c(BOLD, '║          📋 配置摘要                        ║')}")
@@ -343,6 +360,11 @@ def show_summary(llm: dict, db: dict):
     print(f"  {c(BOLD, '模型')}:        {c(CYAN, llm['model'])}")
     print(f"  {c(BOLD, 'Base URL')}:   {llm['api_base'][:60]}")
     print(f"  {c(BOLD, '数据库')}:      {db['database_url'][:60]}")
+    pwd = password.get('web_password', '')
+    if pwd:
+        print(f"  {c(BOLD, '密码保护')}:    {c(GREEN, '已启用')} ({len(pwd)} 字符)")
+    else:
+        print(f"  {c(BOLD, '密码保护')}:    {c(YELLOW, '未启用')}")
     print()
     print(f"  {c(GREEN, '✓')} 配置完成！运行以下命令启动：")
     print()
@@ -369,10 +391,10 @@ def main():
     db       = configure_database()
     redis    = configure_redis()
     tools    = configure_tools()
-    advanced = configure_advanced()
+    password = configure_password()
 
-    write_env_file(llm, db, redis, tools, advanced)
-    show_summary(llm, db)
+    write_env_file(llm, db, redis, tools, advanced, password)
+    show_summary(llm, db, password)
 
 
 if __name__ == "__main__":
