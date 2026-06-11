@@ -18,8 +18,8 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-API_BASE = "http://api:8000"
-WS_BASE = "ws://api:8000"
+API_BASE = os.getenv("API_BASE", "http://localhost:8000")
+WS_BASE = os.getenv("API_BASE", "http://localhost:8000").replace("http://", "ws://")
 
 # 从环境变量读取密码（Docker 容器内 pass，本地可从 .env 自动加载）
 WEB_PASSWORD = os.getenv("WEB_PASSWORD", "").strip()
