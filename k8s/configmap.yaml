@@ -7,7 +7,7 @@ metadata:
 data:
   # --- 从这里设置所有环境变量，相当于 .env 文件 ---
   # 数据库（K8s 里建议用 PostgreSQL，SQLite 不支持多副本）
-  DATABASE_URL: "sqlite:///./data/orchestrator.db"
+  DATABASE_URL: "postgresql://orchestrator:orchestrator@postgres:5432/orchestrator"
   # PostgreSQL 示例: "postgresql://user:pass@postgres-service:5432/orchestrator"
 
   # Redis（K8s 内部 Service 名）

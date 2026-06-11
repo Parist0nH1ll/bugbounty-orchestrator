@@ -7,4 +7,8 @@ echo "[entrypoint.api] Starting FastAPI server..."
 python3 /app/scripts/init_db.py
 
 # 启动 uvicorn
-exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level info
+# Digital Ocean App Platform 自动注入 $PORT=8080
+# Docker Compose / 本地默认 8000
+PORT="${PORT:-8000}"
+echo "[entrypoint.api] Listening on port $PORT"
+exec uvicorn app.main:app --host 0.0.0.0 --port "$PORT" --log-level info

@@ -10,7 +10,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 class Settings(BaseSettings):
     # --- 数据库 ---
-    database_url: str = "sqlite:///./data/orchestrator.db"
+    database_url: str = "postgresql://orchestrator:orchestrator@localhost:5432/orchestrator"
 
     # --- Redis / Celery ---
     redis_url: str = "redis://redis:6379/0"

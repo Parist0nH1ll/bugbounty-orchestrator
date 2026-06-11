@@ -11,6 +11,8 @@ redis==5.0.7
 sqlmodel==0.0.18
 sqlalchemy==2.0.30
 alembic==1.13.1
+psycopg2-binary==2.9.9  # PostgreSQL
+aiosqlite==0.20.0       # SQLite fallback
 
 # DNS
 dnspython==2.6.1
@@ -22,8 +24,7 @@ websockets==12.0
 # AI / LLM
 openai==1.35.3
 
-# Async SQLite
-aiosqlite==0.20.0
+# Async
 aiofiles==24.1.0
 
 # Utilities

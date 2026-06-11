@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Python 依赖（使用清华镜像加速，设置超时避免网络波动）
 COPY requirements.txt /app/requirements.txt
-RUN pip install --upgrade pip setuptools wheel && 
+RUN pip install --upgrade pip setuptools wheel && \
     pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple && \
     pip install --no-cache-dir --default-timeout=120 -r requirements.txt
 
@@ -28,5 +28,10 @@ RUN chmod +x /app/scripts/*.sh
 # 创建数据目录
 RUN mkdir -p /app/data /app/scan_results /app/output
 
-# 默认启动 FastAPI
+# 健康检查（兼容 Digital Ocean App Platform）
+HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:${PORT:-8000}/health || exit 1
+
+# 默认启动 FastAPI（端口通过 $PORT 环境变量控制）
+# Docker Compose 默认 8000，Digital Ocean App Platform 注入 8080
 CMD ["/app/scripts/entrypoint.api.sh"]

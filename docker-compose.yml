@@ -1,6 +1,24 @@
 version: "3.8"
 
 services:
+  # ==================== PostgreSQL ====================
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: orchestrator
+      POSTGRES_PASSWORD: orchestrator
+      POSTGRES_DB: orchestrator
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orchestrator"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   # ==================== Redis ====================
   redis:
     image: redis:7-alpine
@@ -32,6 +50,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      postgres:
+        condition: service_healthy
     command: ["/app/scripts/entrypoint.api.sh"]
 
   # ==================== Celery Worker ====================
@@ -46,10 +66,11 @@ services:
       - ./data:/app/data
       - ./scan_results:/app/scan_results
       - ./output:/app/output
-      # docker.sock: strix 需要 Docker 沙箱 (ghcr.io/usestrix/strix-sandbox)
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       redis:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     command: ["/app/scripts/entrypoint.worker.sh"]
 
@@ -71,4 +92,5 @@ services:
     command: ["streamlit", "run", "streamlit_app.py", "--server.port=8501", "--server.address=0.0.0.0"]
 
 volumes:
+  pg_data:
   redis_data:

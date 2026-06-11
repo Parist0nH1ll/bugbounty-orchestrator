@@ -1,5 +1,6 @@
 """
 数据库初始化 & Session 管理
+支持 PostgreSQL（默认）和 SQLite
 """
 import os
 from contextlib import contextmanager
@@ -9,28 +10,29 @@ from sqlmodel import SQLModel
 
 from app.config import settings
 
-# 确保数据目录存在
-os.makedirs(os.path.dirname(settings.database_url.replace("sqlite:///", "")), exist_ok=True)
-
-# 处理 SQLite 的路径问题
 db_url = settings.database_url
-if db_url.startswith("sqlite:///"):
+
+connect_args = {}
+engine_kwargs = {"pool_pre_ping": True}
+
+# --- PostgreSQL ---
+if db_url.startswith("postgresql"):
+    engine_kwargs["pool_size"] = 10
+    engine_kwargs["max_overflow"] = 20
+
+# --- SQLite ---
+elif db_url.startswith("sqlite"):
+    # 处理相对路径
     db_path = db_url.replace("sqlite:///", "")
     if not db_path.startswith("/"):
         db_path = os.path.join(os.getcwd(), db_path)
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+    os.makedirs(os.path.dirname(db_path) or ".", exist_ok=True)
     db_url = f"sqlite:///{db_path}"
+    connect_args = {"check_same_thread": False}
 
-connect_args = {"check_same_thread": False} if "sqlite" in db_url else {}
+engine = create_engine(db_url, echo=False, connect_args=connect_args, **engine_kwargs)
 
-engine = create_engine(
-    db_url,
-    echo=False,
-    connect_args=connect_args,
-    pool_pre_ping=True,
-)
-
-# 为 SQLite 启用 WAL 模式和外键
+# SQLite 特殊设置
 if "sqlite" in db_url:
     @event.listens_for(engine, "connect")
     def set_sqlite_pragma(dbapi_connection, connection_record):

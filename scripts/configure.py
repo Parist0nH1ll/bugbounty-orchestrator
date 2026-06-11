@@ -320,7 +320,7 @@ def write_env_file(llm: dict, db: dict, redis: dict, tools: dict, advanced: dict
         "LLM_API_KEY=sk-your-key-here":                   f"LLM_API_KEY={llm['api_key']}",
         "LLM_MODEL=gpt-4o":                               f"LLM_MODEL={llm['model']}",
         # 数据库
-        "DATABASE_URL=sqlite:///./data/orchestrator.db":   f"DATABASE_URL={db['database_url']}",
+        "DATABASE_URL=postgresql://orchestrator:orchestrator@localhost:5432/orchestrator":   f"DATABASE_URL={db['database_url']}",
         # Redis
         "REDIS_URL=redis://redis:6379/0":                  f"REDIS_URL={redis['redis_url']}",
         "CELERY_BROKER_URL=redis://redis:6379/1":          f"CELERY_BROKER_URL={redis['celery_broker_url']}",
