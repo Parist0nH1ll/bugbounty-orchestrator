@@ -169,6 +169,108 @@ WEB_PASSWORD=your-password
 - 运行 `python3 scripts/configure.py` 也可交互式设置
 </details>
 
+## ☸️ Kubernetes 部署
+
+适合云服务商（阿里云 ACK、腾讯云 TKE、AWS EKS、自建 K8s 等），提供水平扩展和自动扩缩。
+
+### 架构
+
+```
+                    ┌──────────────┐
+                    │   Ingress    │  (Nginx / Traefik)
+                    │  :80 / :443  │
+                    └──────┬───────┘
+                           │
+              ┌────────────┼────────────┐
+              ▼            ▼            ▼
+        ┌──────────┐ ┌──────────┐ ┌──────────┐
+        │ Streamlit│ │   API    │ │  API     │
+        │  x1      │ │  x2      │ │  x2      │
+        └──────────┘ └────┬─────┘ └────┬─────┘
+                          │            │
+                     ┌────┴────────────┴────┐
+                     │       Redis          │
+                     └─────────┬────────────┘
+                               │ Celery 任务队列
+                     ┌─────────┴────────────┐
+                     │                      │
+               ┌─────┴─────┐          ┌─────┴─────┐
+               │  Worker   │  ...     │  Worker   │  ← HPA 自动扩缩
+               │  Pod #1   │          │  Pod #N   │     2~20 副本
+               │  c=8      │          │  c=8      │     每个 Pod 内 8 并发
+               └───────────┘          └───────────┘
+                     │                      │
+                     │  每个 scan_asset 任务 │
+                     │  并行消费 strix 扫描   │
+                     └──────────┬───────────┘
+                                │
+                          PVC (scan_results)
+```
+
+### 部署步骤
+
+```bash
+# 1. 构建并推送镜像到你的镜像仓库
+docker build -t your-registry/orchestrator-api:latest -f Dockerfile.api .
+docker build -t your-registry/orchestrator-worker:latest -f Dockerfile.worker .
+docker push your-registry/orchestrator-api:latest
+docker push your-registry/orchestrator-worker:latest
+
+# 2. 修改 k8s/*.yaml 中的 image 为你的镜像地址
+#    api.yaml:    image: your-registry/orchestrator-api:latest
+#    worker.yaml: image: your-registry/orchestrator-worker:latest
+#    streamlit.yaml: image: your-registry/orchestrator-api:latest
+
+# 3. 编辑 k8s/configmap.yaml，填入 LLM_API_KEY 和 WEB_PASSWORD
+
+# 4. 一键部署
+kubectl apply -k k8s/
+
+# 5. 查看状态
+kubectl -n bugbounty get all
+```
+
+### 并行扫描能力
+
+| 配置 | 值 | 含义 |
+|------|:--:|------|
+| Worker 副本数 | 4（默认，HPA 可达 20） | 同时运行的 Pod 数 |
+| Worker 并发数 | 8（`CELERY_CONCURRENCY`） | 每个 Pod 内并行任务数 |
+| **总并行扫描数** | **4 × 8 = 32** | 同一时刻最多 32 个 strix 扫描 |
+
+当 CPU 超过 70% 时，HPA 自动增加 Worker 副本（最多 20 个 = 160 并行扫描）。
+
+### 扩缩命令
+
+```bash
+# 手动扩容
+kubectl -n bugbounty scale deployment worker --replicas=10
+
+# 查看 HPA 状态
+kubectl -n bugbounty get hpa
+
+# 实时查看 Worker 日志
+kubectl -n bugbounty logs -f deployment/worker
+```
+
+### 公网访问
+
+```bash
+# 方式 1: LoadBalancer（云服务商，自动分配公网 IP）
+kubectl -n bugbounty get svc streamlit
+# EXTERNAL-IP 列就是公网地址
+
+# 方式 2: Ingress（需先安装 nginx-ingress + 配置域名）
+# 编辑 k8s/ingress.yaml 中的 host，然后：
+kubectl apply -f k8s/ingress.yaml
+
+# 方式 3: 本地测试用 port-forward
+kubectl -n bugbounty port-forward svc/streamlit 8501:80
+# 浏览器打开 http://localhost:8501
+```
+
+> **⚠️ 公网暴露前务必设置 `WEB_PASSWORD`！** 编辑 `k8s/configmap.yaml` 中的 `WEB_PASSWORD` 字段。
+
 ## 📁 项目结构
 
 ```
@@ -198,6 +300,13 @@ orchestrator/
 │   └── main.py              # FastAPI 入口
 ├── frontend/                # Vue 3 前端（可选）
 │   └── nginx.conf
+├── k8s/                     # Kubernetes 部署清单
+│   ├── namespace.yaml
+│   ├── configmap.yaml       # 环境变量集中管理
+│   ├── api.yaml             # FastAPI Deployment + Service
+│   ├── worker.yaml          # Celery Worker + HPA 自动扩缩
+│   ├── streamlit.yaml       # Streamlit + LoadBalancer
+│   └── kustomization.yaml   # kubectl apply -k 一键部署
 ├── scripts/                 # 启动 & 初始化脚本
 ├── streamlit_app.py         # Streamlit 前端
 ├── docker-compose.yml       # 容器编排
