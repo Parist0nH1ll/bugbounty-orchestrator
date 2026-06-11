@@ -1,0 +1,32 @@
+---
+# Ingress（可选：通过域名访问，配合 cert-manager 加 HTTPS）
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: orchestrator
+  namespace: bugbounty
+  annotations:
+    # Nginx ingress 配置
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    # 如果要加 HTTPS（需先安装 cert-manager）
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: bugbounty.example.com  # 改成你的域名
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: streamlit
+                port:
+                  number: 80
+  # TLS（需要 cert-manager）
+  # tls:
+  #   - hosts:
+  #       - bugbounty.example.com
+  #     secretName: bugbounty-tls

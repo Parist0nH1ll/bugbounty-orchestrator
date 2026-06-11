@@ -1,0 +1,25 @@
+---
+# 持久化存储（SQLite + 扫描结果）
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: orchestrator-data
+  namespace: bugbounty
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: orchestrator-scan-results
+  namespace: bugbounty
+spec:
+  accessModes:
+    - ReadWriteMany  # 多 Worker 需要同时读写
+  resources:
+    requests:
+      storage: 50Gi

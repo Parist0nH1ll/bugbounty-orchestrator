@@ -1,0 +1,76 @@
+---
+# Celery Worker - 水平扩展并行扫描
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  namespace: bugbounty
+  labels:
+    app: worker
+spec:
+  replicas: 4  # 可手动增加或通过 HPA 自动扩缩
+  selector:
+    matchLabels:
+      app: worker
+  template:
+    metadata:
+      labels:
+        app: worker
+    spec:
+      containers:
+        - name: worker
+          image: orchestrator-worker:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: orchestrator-config
+          env:
+            - name: CELERY_CONCURRENCY
+              value: "8"  # 每个 Pod 内并发数
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "500m"
+            limits:
+              memory: "4Gi"
+              cpu: "4000m"
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+            - name: scan-results
+              mountPath: /app/scan_results
+            # docker.sock: strix 需要在 worker pod 内启动沙箱容器
+            # 生产环境更好的方案：strix 作为独立 K8s Job，worker 通过 API 提交
+            - name: docker-sock
+              mountPath: /var/run/docker.sock
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: orchestrator-data
+        - name: scan-results
+          persistentVolumeClaim:
+            claimName: orchestrator-scan-results
+        - name: docker-sock
+          hostPath:
+            path: /var/run/docker.sock
+---
+# HPA: CPU > 70% 时自动扩缩 Worker（可选）
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: worker-hpa
+  namespace: bugbounty
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: worker
+  minReplicas: 2
+  maxReplicas: 20
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70

@@ -1,0 +1,30 @@
+---
+# Kustomization - 一键部署所有 K8s 资源
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: bugbounty
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - pvc.yaml
+  - redis.yaml
+  - api.yaml
+  - worker.yaml
+  - streamlit.yaml
+  - ingress.yaml
+
+# 生产环境时取消注释，用实际值替换 ConfigMap 里的占位符
+# configMapGenerator:
+#   - name: orchestrator-config
+#     behavior: replace
+#     literals:
+#       - LLM_API_KEY=sk-real-key
+#       - WEB_PASSWORD=strong-password
+
+images:
+  - name: orchestrator-api
+    newTag: latest
+  - name: orchestrator-worker
+    newTag: latest

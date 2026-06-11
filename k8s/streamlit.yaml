@@ -1,0 +1,56 @@
+---
+# Streamlit 前端
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: streamlit
+  namespace: bugbounty
+  labels:
+    app: streamlit
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: streamlit
+  template:
+    metadata:
+      labels:
+        app: streamlit
+    spec:
+      containers:
+        - name: streamlit
+          image: orchestrator-api:latest  # 复用 API 镜像（含 streamlit）
+          imagePullPolicy: IfNotPresent
+          command: ["streamlit", "run", "streamlit_app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+          ports:
+            - containerPort: 8501
+          envFrom:
+            - configMapRef:
+                name: orchestrator-config
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "200m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8501
+            initialDelaySeconds: 15
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: streamlit
+  namespace: bugbounty
+spec:
+  type: LoadBalancer  # 云服务商会分配公网 IP
+  selector:
+    app: streamlit
+  ports:
+    - port: 80
+      targetPort: 8501
+      protocol: TCP
