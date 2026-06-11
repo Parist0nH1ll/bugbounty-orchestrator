@@ -23,7 +23,8 @@ RUN pip install --upgrade pip setuptools wheel && \
 COPY app/ /app/app/
 COPY scripts/ /app/scripts/
 COPY streamlit_app.py /app/streamlit_app.py
-RUN chmod +x /app/scripts/*.sh
+RUN chmod +x /app/scripts/entrypoint.api.sh && \
+    chmod +x /app/scripts/init_db.py
 
 # 创建数据目录
 RUN mkdir -p /app/data /app/scan_results /app/output
