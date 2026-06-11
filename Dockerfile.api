@@ -30,11 +30,11 @@ RUN chmod +x /app/scripts/entrypoint.api.sh && \
 RUN mkdir -p /app/data /app/scan_results /app/output
 
 # 健康检查（兼容 Digital Ocean App Platform）
-HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
+HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=5 \
     CMD curl -f http://localhost:${PORT:-8501}/ || exit 1
 
 # 启动 FastAPI + Streamlit 双服务（单容器模式，适用 Digital Ocean App Platform）
 # FastAPI 后台运行在 8000，Streamlit 前台运行在 $PORT（DO 注入 8080）
-CMD python3 /app/scripts/init_db.py && \
+CMD python3 /app/scripts/init_db.py || true; \
     uvicorn app.main:app --host 0.0.0.0 --port 8000 --log-level warning & \
-    exec streamlit run /app/streamlit_app.py --server.port=${PORT:-8501} --server.address=0.0.0.0
+    exec streamlit run /app/streamlit_app.py --server.port=${PORT:-8080} --server.address=0.0.0.0
