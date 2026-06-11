@@ -35,4 +35,5 @@ HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
 
 # 默认启动 FastAPI（端口通过 $PORT 环境变量控制）
 # Docker Compose 默认 8000，Digital Ocean App Platform 注入 8080
-CMD ["/app/scripts/entrypoint.api.sh"]
+CMD python3 /app/scripts/init_db.py && \
+    exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --log-level info
