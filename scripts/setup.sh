@@ -234,40 +234,25 @@ install_naabu() {
 # -----------------------------------------------------------
 install_strix() {
     log_step "5/6 Strix (AI 驱动安全扫描)"
-    # strix 二进制对 glibc 版本有要求，通过 Docker 镜像运行避免兼容问题
-    # 镜像: ghcr.io/usestrix/strix-agent:latest
 
-    WRAPPER="/usr/local/bin/strix"
-
-    if [ -f "$WRAPPER" ] && grep -q "strix-agent" "$WRAPPER" 2>/dev/null; then
-        log_info "strix Docker wrapper 已就绪"
-    else
-        log_info "安装 strix Docker 透明代理到 $WRAPPER"
-        sudo cp "$PROJECT_DIR/scripts/strix-docker-wrapper.sh" "$WRAPPER"
-        sudo chmod +x "$WRAPPER"
-    fi
-
-    if ! command -v docker &>/dev/null; then
-        log_error "Docker 未安装，strix 不可用"
-        log_warn "Strix 需要 Docker 来运行官方镜像和沙箱环境"
+    if command -v strix &>/dev/null; then
+        log_info "strix 已安装: $(strix --version 2>&1 | head -1)"
         return
     fi
 
-    # 预拉取镜像
-    STRIX_IMAGE="ghcr.io/usestrix/strix-agent:latest"
-    if docker image inspect "$STRIX_IMAGE" &>/dev/null 2>&1; then
-        log_info "strix 镜像已存在"
+    log_info "安装 strix (通过官方脚本)..."
+    if curl -sSL https://strix.ai/install | bash; then
+        log_info "strix 安装完成"
     else
-        log_info "下载 strix Docker 镜像 (约 500MB, 仅首次需要)..."
-    log_info "拉取中: $STRIX_IMAGE"
-        docker pull ghcr.io/usestrix/strix-agent:latest
-        log_info "镜像拉取完成"
+        log_warn "strix 安装失败（网络或平台问题），不影响主流程"
+        log_warn "可手动安装: curl -sSL https://strix.ai/install | bash"
+        return
     fi
 
     if strix --version &>/dev/null 2>&1; then
-        log_info "strix (Docker) 可用: $(strix --version 2>&1 | head -1)"
+        log_info "strix 可用: $(strix --version 2>&1 | head -1)"
     else
-        log_warn "strix wrapper 验证失败，检查 Docker 是否正常运行"
+        log_warn "strix 安装后无法执行，检查 PATH"
     fi
 }
 
