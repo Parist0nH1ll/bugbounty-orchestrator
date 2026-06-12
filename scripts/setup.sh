@@ -265,10 +265,13 @@ init_project() {
 
     mkdir -p data scan_results output
 
-    # 如果 .env 不存在，从模板创建
+    # 如果 .env 不存在，从模板创建；如果已有则修正 PostgreSQL → SQLite
     if [ ! -f .env ]; then
         cp .env.example .env
         log_warn ".env 文件已从模板创建，请编辑填入 LLM_API_KEY"
+    elif grep -q '^DATABASE_URL=postgresql://' .env 2>/dev/null; then
+        log_warn "检测到 PostgreSQL DATABASE_URL，已切换为 SQLite（未安装 psycopg2）"
+        sed -i 's|^DATABASE_URL=postgresql://.*|DATABASE_URL=sqlite:///./data/orchestrator.db|' .env
     fi
 
     # 初始化数据库
