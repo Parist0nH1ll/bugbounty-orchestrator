@@ -19,6 +19,7 @@ engine_kwargs = {"pool_pre_ping": True}
 if db_url.startswith("postgresql"):
     engine_kwargs["pool_size"] = 10
     engine_kwargs["max_overflow"] = 20
+    connect_args = {"connect_timeout": 5}  # 5 秒超时，防止卡死
 
 # --- SQLite ---
 elif db_url.startswith("sqlite"):

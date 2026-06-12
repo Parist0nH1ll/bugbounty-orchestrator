@@ -65,6 +65,7 @@ open http://localhost:8501
 | Streamlit 前端 | `8501` | Web 控制台，上传域名、查看报告 |
 | FastAPI | `8000` | 后端 API，Swagger 文档在 `/docs` |
 | Redis | `6379` | Celery 任务队列 + WebSocket 消息广播 |
+| PostgreSQL | `5432` | 持久化存储（任务、域名、漏洞记录） |
 | Celery Worker | - | 后台执行扫描任务，默认 8 并发 |
 
 ### 常用命令
@@ -329,8 +330,8 @@ orchestrator/
                           └──────┬───────┘
                                  │ HTTP/WS
                                  ▼
-┌──────────┐  Redis   ┌──────────────────┐  SQLite/   ┌──────────────┐
-│  Redis   │◄───────►│     FastAPI       │◄──────────►│   SQLite /   │
+┌──────────┐  Redis   ┌──────────────────┐  PostgreSQL/ ┌────────────────┐
+│  Redis   │◄───────►│     FastAPI       │◄──────────►│ PostgreSQL/   │
 │  :6379   │ pub/sub │     :8000         │  SQLAlchemy│  PostgreSQL  │
 │ 队列/缓存 │         │  ┌──────────────┐ │            └──────────────┘
 └────┬─────┘         │  │  WebSocket   │ │
@@ -495,7 +496,7 @@ strix_wrapper.py
 ## 🛠️ 技术栈
 
 - **后端**：FastAPI + Celery + Redis
-- **数据库**：SQLite (默认) / PostgreSQL
+- **数据库**：PostgreSQL (默认) / SQLite
 - **子域名**：Subfinder (自动安装)
 - **端口扫描**：Naabu / Python Socket
 - **漏洞扫描**：Strix（通过 Docker 镜像运行，解决 glibc 兼容问题）
