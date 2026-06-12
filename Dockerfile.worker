@@ -24,6 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-dev \
     # DNS 工具
     dnsutils \
+	    libpq-dev \
     # 网络工具 (naabu 依赖)
     libpcap-dev \
     # Docker CLI（strix 通过 docker run 调用官方镜像 + 沙箱）

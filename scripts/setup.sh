@@ -53,7 +53,7 @@ install_python() {
     if ! python3 -m venv --help &>/dev/null; then
         log_warn "安装 python3-venv..."
         case "$OS" in
-            linux) sudo apt-get install -y -qq python3-venv python3-full ;;
+            linux) sudo apt-get install -y -qq python3-venv python3-full libpq-dev ;;
         esac
     fi
 
