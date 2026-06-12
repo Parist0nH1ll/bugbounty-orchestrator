@@ -44,7 +44,7 @@ install_python() {
         log_warn "正在安装 python3..."
         case "$OS" in
             macos) brew install python@3.11 ;;
-            linux) sudo apt-get update -qq && sudo apt-get install -y -qq python3 python3-pip python3-dev python3-full python3-venv ;;
+            linux) sudo apt-get update && sudo apt-get install -y python3 python3-pip python3-dev python3-full python3-venv ;;
         esac
         log_info "python3 安装完成"
     fi
@@ -53,7 +53,7 @@ install_python() {
     if ! python3 -m venv --help &>/dev/null; then
         log_warn "安装 python3-venv..."
         case "$OS" in
-            linux) sudo apt-get install -y -qq python3-venv python3-full libpq-dev ;;
+            linux) sudo apt-get install -y python3-venv python3-full libpq-dev ;;
         esac
     fi
 
@@ -139,7 +139,7 @@ install_redis() {
             brew install redis && brew services start redis
             ;;
         linux)
-            sudo apt-get update -qq && sudo apt-get install -y -qq redis-server
+            sudo apt-get update && sudo apt-get install -y redis-server
             sudo systemctl enable redis-server && sudo systemctl start redis-server
             ;;
     esac
@@ -387,8 +387,8 @@ case "$OS" in
         brew install python@3.12 redis 2>/dev/null || true
         ;;
     linux)
-        sudo apt-get update -qq
-        sudo apt-get install -y -qq             python3.12 python3.12-venv python3.12-dev             python3-full python3-venv             libpq-dev             redis-server             curl wget git unzip gcc             ca-certificates dnsutils
+        sudo apt-get update
+        sudo apt-get install -y             python3.12 python3.12-venv python3.12-dev             python3-full python3-venv             libpq-dev             redis-server             curl wget git unzip gcc             ca-certificates dnsutils
         # 确保 Redis 运行
         if ! redis-cli ping &>/dev/null; then
             redis-server --daemonize yes --port 6379 2>/dev/null || true
@@ -396,6 +396,23 @@ case "$OS" in
         fi
         ;;
 esac
+
+# 验证 python3.12 可用（apt install 可能静默失败）
+if ! command -v python3.12 &>/dev/null; then
+    log_warn "python3.12 未安装，尝试 deadsnakes PPA..."
+    sudo apt-get install -y software-properties-common
+    sudo add-apt-repository -y ppa:deadsnakes/ppa
+    sudo apt-get update
+    sudo apt-get install -y python3.12 python3.12-venv python3.12-dev
+fi
+
+if ! command -v python3.12 &>/dev/null; then
+    log_error "无法安装 python3.12，请手动安装后重试:"
+    log_error "  sudo add-apt-repository ppa:deadsnakes/ppa"
+    log_error "  sudo apt-get install python3.12 python3.12-venv python3.12-dev"
+    exit 1
+fi
+
 log_info "系统依赖安装完成"
 
 # 选 Python 版本（优先 3.12，pandas/psycopg2 等有预编译 wheel）
