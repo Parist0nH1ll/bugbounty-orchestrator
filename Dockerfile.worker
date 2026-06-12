@@ -33,8 +33,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # --- Python 依赖 ---
 COPY requirements.txt /app/requirements.txt
-RUN pip3 install --upgrade pip setuptools wheel --break-system-packages && \
-    pip3 install --no-cache-dir --default-timeout=120 --break-system-packages -r requirements.txt
+RUN pip3 install --no-cache-dir --default-timeout=120 --break-system-packages -r requirements.txt
 
 # --- 安装 Subfinder ---
 # 带重试 + GitHub 镜像回退，解决国内网络不稳定问题
