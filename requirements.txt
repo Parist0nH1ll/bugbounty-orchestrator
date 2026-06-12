@@ -11,8 +11,7 @@ redis==5.0.7
 sqlmodel==0.0.18
 sqlalchemy==2.0.30
 alembic==1.13.1
-psycopg2-binary==2.9.9  # PostgreSQL
-aiosqlite==0.20.0       # SQLite fallback
+aiosqlite==0.20.0       # SQLite（默认）
 
 # DNS
 dnspython==2.6.1

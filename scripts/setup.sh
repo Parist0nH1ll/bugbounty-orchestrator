@@ -393,7 +393,8 @@ case "$OS" in
             libpq-dev \
             redis-server \
             curl wget git unzip gcc \
-            ca-certificates dnsutils
+            ca-certificates dnsutils \
+            libjpeg-dev zlib1g-dev libfreetype6-dev liblcms2-dev
         # 确保 Redis 运行
         if ! redis-cli ping &>/dev/null; then
             redis-server --daemonize yes --port 6379 2>/dev/null || true
