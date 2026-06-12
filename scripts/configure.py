@@ -391,6 +391,7 @@ def main():
     db       = configure_database()
     redis    = configure_redis()
     tools    = configure_tools()
+    advanced = configure_advanced()
     password = configure_password()
 
     write_env_file(llm, db, redis, tools, advanced, password)
