@@ -44,7 +44,7 @@ install_python() {
         log_warn "正在安装 python3..."
         case "$OS" in
             macos) brew install python@3.11 ;;
-            linux) sudo apt-get update -qq && sudo apt-get install -y -qq python3 python3-pip python3-dev ;;
+            linux) sudo apt-get update -qq && sudo apt-get install -y -qq python3 python3-pip python3-dev python3-full python3-venv ;;
         esac
         log_info "python3 安装完成"
     fi
@@ -67,9 +67,16 @@ install_python() {
 install_python_deps() {
     log_step "2/8 Python 依赖包"
     cd "$PROJECT_DIR"
-    $PIP install --upgrade pip -q
-    $PIP install -r requirements.txt -q
-    log_info "Python 依赖安装完成"
+
+    # 创建虚拟环境（Ubuntu 24.04+ 禁止全局 pip install）
+    if [ ! -d .venv ]; then
+        python3 -m venv .venv
+        log_info "虚拟环境已创建: .venv"
+    fi
+    source .venv/bin/activate
+    pip install --upgrade pip -q
+    pip install -r requirements.txt -q
+    log_info "Python 依赖安装完成 (到 .venv)"
 }
 
 # -----------------------------------------------------------
@@ -245,6 +252,7 @@ init_project() {
     fi
 
     # 初始化数据库
+    source .venv/bin/activate 2>/dev/null || true
     python3 scripts/init_db.py
     log_info "数据库初始化完成"
 }
@@ -288,8 +296,9 @@ final_check() {
     if $all_ok; then
         echo -e "${GREEN}所有必需依赖已就绪！${NC}"
         echo ""
-        echo "  重新配置:       python3 scripts/configure.py"
-        echo "  启动 API 服务:  python3 -m uvicorn app.main:app --reload --port 8000"
+        echo "  重新配置:       source .venv/bin/activate &&  python3 scripts/configure.py"
+        echo "  【先执行 source .venv/bin/activate】
+  启动 API 服务:  python3 -m uvicorn app.main:app --reload --port 8000"
         echo "  启动 Worker:    celery -A app.tasks.celery_app worker -l info -c 8"
         echo "  启动前端:       streamlit run streamlit_app.py"
     else
@@ -313,14 +322,14 @@ configure_interactive() {
         read -p "$(echo -e ${CYAN}是否现在运行交互式配置向导？[Y/n]: ${NC})" run_configure
         run_configure=${run_configure:-Y}
         if [[ "$run_configure" =~ ^[Yy] ]]; then
-            python3 scripts/configure.py
+            source .venv/bin/activate &&  python3 scripts/configure.py
         else
-            log_info "跳过配置。可稍后运行: python3 scripts/configure.py"
+            log_info "跳过配置。可稍后运行: source .venv/bin/activate &&  python3 scripts/configure.py"
             log_warn "请手动编辑 .env 填入 LLM_API_KEY"
         fi
     else
         log_info "非交互模式，跳过配置向导"
-        log_warn "请运行: python3 scripts/configure.py 或手动编辑 .env"
+        log_warn "请运行: source .venv/bin/activate &&  python3 scripts/configure.py 或手动编辑 .env"
     fi
 }
 
