@@ -49,6 +49,14 @@ install_python() {
         log_info "python3 安装完成"
     fi
 
+    # 确保 venv 已装（Python 存在 ≠ venv 存在，比如 Python 3.14 但只有 python3.12-venv）
+    if ! python3 -m venv --help &>/dev/null; then
+        log_warn "安装 python3-venv..."
+        case "$OS" in
+            linux) sudo apt-get install -y -qq python3-venv python3-full ;;
+        esac
+    fi
+
     if command -v pip3 &>/dev/null; then
         PIP="pip3"
     elif python3 -m pip --version &>/dev/null; then
@@ -69,9 +77,26 @@ install_python_deps() {
     cd "$PROJECT_DIR"
 
     # 创建虚拟环境（Ubuntu 24.04+ 禁止全局 pip install）
-    if [ ! -d .venv ]; then
-        python3 -m venv .venv
-        log_info "虚拟环境已创建: .venv"
+    if [ -f .venv/bin/activate ]; then
+        log_info "虚拟环境已存在"
+    else
+        rm -rf .venv
+        if python3 -m venv .venv 2>/dev/null; then
+            log_info "虚拟环境已创建: .venv"
+        elif python3 -m venv --without-pip .venv 2>/dev/null; then
+            log_info "虚拟环境已创建 (without pip)"
+            . .venv/bin/activate
+            curl -sS https://bootstrap.pypa.io/get-pip.py | python3 -q
+        elif python3 -m pip install --user virtualenv -q 2>/dev/null && python3 -m virtualenv .venv 2>/dev/null; then
+            log_info "虚拟环境已创建 (通过 virtualenv)"
+        else
+            log_error "无法创建虚拟环境（Python 3.14 可能缺 venv 模块）"
+            echo ''
+            echo '手动修复:'
+            echo '  pip3 install --user virtualenv'
+            echo '  python3 -m virtualenv .venv'
+            exit 1
+        fi
     fi
     source .venv/bin/activate
     pip install --upgrade pip -q
