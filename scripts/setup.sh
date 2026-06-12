@@ -107,8 +107,9 @@ install_python_deps() {
         fi
     fi
     source .venv/bin/activate
-    pip install --upgrade pip -q
-    pip install -r requirements.txt -q
+    pip install --upgrade pip
+    log_info "安装 Python 依赖包 (这可能需要几分钟)..."
+pip install -r requirements.txt --progress-bar on
     log_info "Python 依赖安装完成 (到 .venv)"
 }
 
@@ -156,25 +157,25 @@ install_redis() {
 # -----------------------------------------------------------
 # 带重试和镜像回退的下载函数（解决 GitHub 下载卡住问题）
 # -----------------------------------------------------------
-download_github_release() {
+download_github_release_orig() {
     local url="$1"
     local output="$2"
     local mirror_url="https://ghproxy.com/${url}"
-    wget -q --tries=5 --retry-connrefused --timeout=30 --waitretry=15 -O "$output" "$url" || \
-    wget -q --tries=5 --retry-connrefused --timeout=30 --waitretry=15 -O "$output" "$mirror_url"
+    wget --tries=5 --show-progress --retry-connrefused --timeout=30 --waitretry=15 -O "$output" "$url" || \
+    wget --tries=5 --show-progress --retry-connrefused --timeout=30 --waitretry=15 -O "$output" "$mirror_url"
 }
 
 # -----------------------------------------------------------
 # 4. Subfinder
 # -----------------------------------------------------------
 install_subfinder() {
-    log_step "4/8 Subfinder (子域名发现)"
+    log_step "3/6 Subfinder (子域名发现)"
     if command -v subfinder &>/dev/null; then
         log_info "subfinder 已安装: $(subfinder -version 2>&1 | head -1)"
         return
     fi
 
-    log_warn "正在安装 subfinder..."
+    log_info "下载 subfinder (GitHub, 可能需要翻墙)..."
     case "$OS" in
         macos)
             brew install subfinder
@@ -182,7 +183,7 @@ install_subfinder() {
         linux)
             SUBFINDER_VER="2.6.6"
             SUBFINDER_URL="https://github.com/projectdiscovery/subfinder/releases/download/v${SUBFINDER_VER}/subfinder_${SUBFINDER_VER}_linux_amd64.zip"
-            download_github_release "$SUBFINDER_URL" /tmp/subfinder.zip
+            download_github_release_orig "$SUBFINDER_URL" /tmp/subfinder.zip
             unzip -o /tmp/subfinder.zip -d /tmp/subfinder_out
             sudo mv /tmp/subfinder_out/subfinder /usr/local/bin/
             sudo chmod +x /usr/local/bin/subfinder
@@ -200,7 +201,7 @@ install_subfinder() {
 # 5. Naabu (可选)
 # -----------------------------------------------------------
 install_naabu() {
-    log_step "5/8 Naabu (快速端口扫描，可选)"
+    log_step "4/6 Naabu (快速端口扫描，可选)"
     if command -v naabu &>/dev/null; then
         log_info "naabu 已安装: $(naabu -version 2>&1 | head -1)"
         return
@@ -214,7 +215,7 @@ install_naabu() {
         linux)
             NAABU_VER="2.3.1"
             NAABU_URL="https://github.com/projectdiscovery/naabu/releases/download/v${NAABU_VER}/naabu_${NAABU_VER}_linux_amd64.zip"
-            download_github_release "$NAABU_URL" /tmp/naabu.zip
+            download_github_release_orig "$NAABU_URL" /tmp/naabu.zip
             unzip -o /tmp/naabu.zip -d /tmp/naabu_out
             sudo mv /tmp/naabu_out/naabu /usr/local/bin/
             sudo chmod +x /usr/local/bin/naabu
@@ -232,7 +233,7 @@ install_naabu() {
 # 6. Strix (AI 安全扫描)
 # -----------------------------------------------------------
 install_strix() {
-    log_step "6/8 Strix (AI 驱动安全扫描)"
+    log_step "5/6 Strix (AI 驱动安全扫描)"
     # strix 二进制对 glibc 版本有要求，通过 Docker 镜像运行避免兼容问题
     # 镜像: ghcr.io/usestrix/strix-agent:latest
 
@@ -257,8 +258,9 @@ install_strix() {
     if docker image inspect "$STRIX_IMAGE" &>/dev/null 2>&1; then
         log_info "strix 镜像已存在"
     else
-        log_info "拉取 strix 镜像: $STRIX_IMAGE"
-        docker pull "$STRIX_IMAGE" 2>&1 | tail -3
+        log_info "下载 strix Docker 镜像 (约 500MB, 仅首次需要)..."
+    log_info "拉取中: $STRIX_IMAGE"
+        docker pull ghcr.io/usestrix/strix-agent:latest
         log_info "镜像拉取完成"
     fi
 
@@ -273,7 +275,7 @@ install_strix() {
 # 7. 初始化数据库 + 创建目录
 # -----------------------------------------------------------
 init_project() {
-    log_step "7/8 项目初始化"
+    log_step "项目初始化"
     cd "$PROJECT_DIR"
 
     mkdir -p data scan_results output
@@ -319,7 +321,7 @@ final_check() {
 
     all_ok=true
     check "Python3"     "python3 --version"               || all_ok=false
-    check "pip"         "$PIP --version"                   || all_ok=false
+    check "pip"         "pip --version"                   || all_ok=false
     check "Redis"       "redis-cli ping"                   || all_ok=false
     check "Subfinder"   "subfinder -version 2>/dev/null"   "optional"
     check "Naabu"       "naabu -version 2>/dev/null"        "optional"
@@ -343,7 +345,7 @@ final_check() {
 # 8. 交互式配置向导
 # -----------------------------------------------------------
 configure_interactive() {
-    log_step "8/8 交互式配置"
+    log_step "交互式配置"
     if [ -f .env ] && grep -q "sk-your-key-here" .env 2>/dev/null; then
         echo ""
         echo -e "${YELLOW}检测到 .env 中 LLM_API_KEY 仍为占位值。${NC}"
@@ -377,12 +379,57 @@ echo "  AI 漏洞挖掘平台 - 一键安装脚本"
 echo "============================================"
 
 detect_os
-install_python
-install_python_deps
-install_redis
+
+# ====== 第一阶段：所有系统级依赖（apt-get / brew） ======
+log_step "1/6 系统依赖"
+case "$OS" in
+    macos)
+        brew install python@3.12 redis 2>/dev/null || true
+        ;;
+    linux)
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq             python3.12 python3.12-venv python3.12-dev             python3-full python3-venv             libpq-dev             redis-server             curl wget git unzip gcc             ca-certificates dnsutils
+        # 确保 Redis 运行
+        if ! redis-cli ping &>/dev/null; then
+            redis-server --daemonize yes --port 6379 2>/dev/null || true
+            sleep 1
+        fi
+        ;;
+esac
+log_info "系统依赖安装完成"
+
+# 选 Python 版本（优先 3.12，pandas/psycopg2 等有预编译 wheel）
+if command -v python3.12 &>/dev/null; then
+    PYTHON=python3.12
+else
+    PYTHON=python3
+fi
+log_info "使用 Python: $($PYTHON --version)"
+
+# ====== 第二阶段：Python 虚拟环境 + 依赖包 ======
+log_step "2/6 Python 环境"
+cd "$PROJECT_DIR"
+rm -rf .venv
+$PYTHON -m venv .venv || {
+    log_warn "标准 venv 失败，尝试 virtualenv..."
+    $PYTHON -m pip install --user virtualenv -q
+    $PYTHON -m virtualenv .venv
+}
+source .venv/bin/activate
+log_info "升级 pip..."
+pip install --upgrade pip
+log_info "安装 Python 依赖包 (这可能需要几分钟)..."
+pip install -r requirements.txt --progress-bar on
+log_info "Python 依赖安装完成"
+
+# ====== 第三阶段：安全工具 ======
 install_subfinder
 install_naabu
 install_strix
+
+# ====== 第四阶段：项目初始化 ======
 init_project
+
+# ====== 第五阶段：检查 + 配置 ======
 final_check
 configure_interactive
