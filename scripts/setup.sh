@@ -388,7 +388,12 @@ case "$OS" in
         ;;
     linux)
         sudo apt-get update
-        sudo apt-get install -y             python3.12 python3.12-venv python3.12-dev             python3-full python3-venv             libpq-dev             redis-server             curl wget git unzip gcc             ca-certificates dnsutils
+        sudo apt-get install -y \
+            python3 python3-dev python3-full python3-venv \
+            libpq-dev \
+            redis-server \
+            curl wget git unzip gcc \
+            ca-certificates dnsutils
         # 确保 Redis 运行
         if ! redis-cli ping &>/dev/null; then
             redis-server --daemonize yes --port 6379 2>/dev/null || true
@@ -397,17 +402,26 @@ case "$OS" in
         ;;
 esac
 
-# 验证 python3.12 可用（apt install 可能静默失败）
-if ! command -v python3.12 &>/dev/null; then
-    log_warn "python3.12 未安装，尝试 deadsnakes PPA..."
+# 验证 Python ≥ 3.12 可用（默认仓库没有 python3.12 命名包，用 python3 检查版本）
+_need_deadsnakes=false
+if command -v python3.12 &>/dev/null; then
+    :  # python3.12 二进制已存在
+elif python3 -c "import sys; exit(0 if sys.version_info >= (3,12) else 1)" 2>/dev/null; then
+    :  # python3 就是 3.12+，无需 deadsnakes
+else
+    _need_deadsnakes=true
+fi
+
+if $_need_deadsnakes; then
+    log_warn "Python < 3.12，尝试 deadsnakes PPA..."
     sudo apt-get install -y software-properties-common
     sudo add-apt-repository -y ppa:deadsnakes/ppa
     sudo apt-get update
     sudo apt-get install -y python3.12 python3.12-venv python3.12-dev
 fi
 
-if ! command -v python3.12 &>/dev/null; then
-    log_error "无法安装 python3.12，请手动安装后重试:"
+if ! command -v python3.12 &>/dev/null && ! python3 -c "import sys; exit(0 if sys.version_info >= (3,12) else 1)" 2>/dev/null; then
+    log_error "无法安装 Python 3.12+，请手动安装后重试:"
     log_error "  sudo add-apt-repository ppa:deadsnakes/ppa"
     log_error "  sudo apt-get install python3.12 python3.12-venv python3.12-dev"
     exit 1
