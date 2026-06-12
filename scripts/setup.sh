@@ -66,7 +66,15 @@ install_python() {
         curl -sS https://bootstrap.pypa.io/get-pip.py | python3
         PIP="pip3"
     fi
-    log_info "pip 可用: $($PIP --version)"
+    lnfo "pip 可用: $($PIP --version)"
+
+    # Python 3.14 太新，优先用 3.12（pandas/psycopg2 等还没适配）
+    if command -v python3.12 &>/dev/null && python3.12 -m venv --help &>/dev/null 2>&1; then
+        PYTHON=python3.12
+        log_info "使用 Python 3.12 (python3 是 $(python3 --version | awk '{print $2}'))"
+    else
+        PYTHON=python3
+    fi
 }
 
 # -----------------------------------------------------------
@@ -81,20 +89,20 @@ install_python_deps() {
         log_info "虚拟环境已存在"
     else
         rm -rf .venv
-        if python3 -m venv .venv 2>/dev/null; then
+        if $PYTHON -m venv .venv 2>/dev/null; then
             log_info "虚拟环境已创建: .venv"
-        elif python3 -m venv --without-pip .venv 2>/dev/null; then
+        elif $PYTHON -m venv --without-pip .venv 2>/dev/null; then
             log_info "虚拟环境已创建 (without pip)"
             . .venv/bin/activate
-            curl -sS https://bootstrap.pypa.io/get-pip.py | python3 -q
-        elif python3 -m pip install --user virtualenv -q 2>/dev/null && python3 -m virtualenv .venv 2>/dev/null; then
+            curl -sS https://bootstrap.pypa.io/get-pip.py | $PYTHON -q
+        elif $PYTHON -m pip install --user virtualenv -q 2>/dev/null && $PYTHON -m virtualenv .venv 2>/dev/null; then
             log_info "虚拟环境已创建 (通过 virtualenv)"
         else
             log_error "无法创建虚拟环境（Python 3.14 可能缺 venv 模块）"
             echo ''
             echo '手动修复:'
             echo '  pip3 install --user virtualenv'
-            echo '  python3 -m virtualenv .venv'
+            echo '  $PYTHON -m virtualenv .venv'
             exit 1
         fi
     fi
@@ -278,7 +286,7 @@ init_project() {
 
     # 初始化数据库
     source .venv/bin/activate 2>/dev/null || true
-    python3 scripts/init_db.py
+    $PYTHON scripts/init_db.py
     log_info "数据库初始化完成"
 }
 
