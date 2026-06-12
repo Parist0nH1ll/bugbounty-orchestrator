@@ -66,7 +66,7 @@ install_python() {
         curl -sS https://bootstrap.pypa.io/get-pip.py | python3
         PIP="pip3"
     fi
-    lnfo "pip 可用: $($PIP --version)"
+    log_info "pip 可用: $($PIP --version)"
 
     # Python 3.14 太新，优先用 3.12（pandas/psycopg2 等还没适配）
     if command -v python3.12 &>/dev/null && python3.12 -m venv --help &>/dev/null 2>&1; then
